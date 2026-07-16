@@ -9,7 +9,7 @@ export function createApp() {
 
   app.use(
     cors({
-      origin: env.corsOrigin,
+      origin: '*', // TODO: Change to the allowed origins
       methods: ['GET', 'POST', 'OPTIONS'],
     }),
   )
