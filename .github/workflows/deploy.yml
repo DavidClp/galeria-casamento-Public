@@ -1,0 +1,48 @@
+name: Deploy Galeria Casamento API
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_KEY }}
+
+      - name: Deploy to VPS
+        run: |
+          ssh -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
+            set -e
+
+            if [ ! -d "/home/david/galeria-casamento-api/.git" ]; then
+              rm -rf /home/david/galeria-casamento-api
+              git clone https://github.com/${{ github.repository }} /home/david/galeria-casamento-api
+            else
+              cd /home/david/galeria-casamento-api
+              git fetch origin main
+              git reset --hard origin/main
+            fi
+
+            cd /home/david/galeria-casamento-api
+
+            echo "NODE_ENV=production" > .env
+            echo "MODE=PROD" >> .env
+            echo "PORT=${{ secrets.PORT }}" >> .env
+            echo "R2_ACCESS_KEY_ID=${{ secrets.R2_ACCESS_KEY_ID }}" >> .env
+            echo "R2_SECRET_ACCESS_KEY=${{ secrets.R2_SECRET_ACCESS_KEY }}" >> .env
+            echo "R2_ENDPOINT=${{ secrets.R2_ENDPOINT }}" >> .env
+            echo "R2_BUCKET=${{ secrets.R2_BUCKET }}" >> .env
+            echo "R2_PUBLIC_URL=${{ secrets.R2_PUBLIC_URL }}" >> .env
+            echo "CORS_ORIGIN=${{ secrets.CORS_ORIGIN }}" >> .env
+            echo "DATABASE_URL=${{ secrets.DATABASE_URL }}" >> .env
+
+            docker compose up -d --build
+          EOF

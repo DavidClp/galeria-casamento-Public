@@ -1,0 +1,225 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model badges {
+  id          String        @id
+  slug        String        @unique
+  name        String
+  description String
+  icon_emoji  String        @default("🏅")
+  xp_reward   Int           @default(0)
+  created_at  DateTime      @default(now())
+  user_badges user_badges[]
+}
+
+model casamento_confirmacao {
+  id                    String   @id
+  created_at            DateTime @default(now())
+  quantidade_convidados Int
+  nome                  String
+  observacoes           String?
+}
+
+model daily_missions {
+  id         String           @id
+  user_id    String
+  date       DateTime         @db.Date
+  type       DailyMissionType
+  target     Int              @default(1)
+  progress   Int              @default(0)
+  completed  Boolean          @default(false)
+  xp_reward  Int              @default(0)
+  created_at DateTime         @default(now())
+  users      users            @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, date, type])
+}
+
+model game_progress {
+  id           String    @id
+  user_id      String
+  game_id      String
+  completed    Boolean   @default(false)
+  completed_at DateTime?
+  stats        Json?
+  games        games     @relation(fields: [game_id], references: [id], onDelete: Cascade)
+  users        users     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, game_id])
+}
+
+model games {
+  id            String          @id
+  title         String
+  description   String?
+  type          GameType        @default(WORD_SEARCH)
+  difficulty    GameDifficulty  @default(EASY)
+  config        Json
+  is_active     Boolean         @default(true)
+  order         Int             @default(0)
+  created_at    DateTime        @default(now())
+  updated_at    DateTime
+  game_progress game_progress[]
+}
+
+model images {
+  id         String   @id
+  data       Bytes
+  mime_type  String   @default("image/webp")
+  file_name  String
+  size       Int
+  created_at DateTime @default(now())
+}
+
+model lessons {
+  id         String     @id
+  module_id  String
+  title      String
+  order      Int
+  content    Json       @default("[]")
+  created_at DateTime   @default(now())
+  updated_at DateTime
+  is_active  Boolean    @default(true)
+  kind       LessonKind @default(LESSON)
+  modules    modules    @relation(fields: [module_id], references: [id], onDelete: Cascade)
+  progress   progress[]
+}
+
+model media {
+  id         String    @id @db.Uuid
+  guest      String
+  src        String
+  type       MediaType
+  created_at DateTime  @default(now())
+
+  @@index([created_at(sort: Desc), id(sort: Desc)])
+  @@index([type, created_at(sort: Desc)])
+}
+
+model modules {
+  id                    String                  @id
+  title                 String
+  description           String?
+  order                 Int
+  created_at            DateTime                @default(now())
+  updated_at            DateTime
+  audience              ModuleAudience          @default(ADULT)
+  kids_meta             Json?
+  lessons               lessons[]
+  student_module_access student_module_access[]
+}
+
+model platform_config {
+  id                       Int      @id @default(1)
+  disable_student_password Boolean  @default(false)
+  created_at               DateTime @default(now())
+  updated_at               DateTime
+}
+
+model progress {
+  id                    String    @id
+  user_id               String
+  lesson_id             String
+  completed             Boolean   @default(false)
+  completed_at          DateTime?
+  created_at            DateTime  @default(now())
+  quiz_results          Json?
+  open_question_answers Json?
+  checklist_state       Json?
+  game_results          Json?
+  lessons               lessons   @relation(fields: [lesson_id], references: [id], onDelete: Cascade)
+  users                 users     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, lesson_id])
+}
+
+model student_module_access {
+  id        String  @id
+  user_id   String
+  module_id String
+  modules   modules @relation(fields: [module_id], references: [id], onDelete: Cascade)
+  users     users   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, module_id])
+}
+
+model user_badges {
+  id        String   @id
+  user_id   String
+  badge_id  String
+  earned_at DateTime @default(now())
+  badges    badges   @relation(fields: [badge_id], references: [id], onDelete: Cascade)
+  users     users    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, badge_id])
+}
+
+model users {
+  id                    String                  @id
+  name                  String
+  email                 String                  @unique
+  password              String
+  role                  Role                    @default(STUDENT)
+  created_at            DateTime                @default(now())
+  updated_at            DateTime
+  avatar_config         Json?
+  current_streak        Int                     @default(0)
+  last_activity_date    DateTime?
+  level                 Int                     @default(1)
+  profile_mode          ProfileMode             @default(ADULT)
+  total_xp              Int                     @default(0)
+  daily_missions        daily_missions[]
+  game_progress         game_progress[]
+  progress              progress[]
+  student_module_access student_module_access[]
+  user_badges           user_badges[]
+}
+
+enum DailyMissionType {
+  LOGIN
+  COMPLETE_LESSON
+  QUIZ_CORRECT
+}
+
+enum GameDifficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum GameType {
+  WORD_SEARCH
+  HANGMAN
+}
+
+enum LessonKind {
+  LESSON
+  EXAM
+}
+
+enum MediaType {
+  photo
+  video
+}
+
+enum ModuleAudience {
+  ADULT
+  KIDS
+  ALL
+}
+
+enum ProfileMode {
+  ADULT
+  KIDS
+}
+
+enum Role {
+  ADMIN
+  STUDENT
+}

@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  galeria-casamento-api:
+    build: .
+    container_name: galeria-casamento-api
+    restart: always
+    networks:
+      - proxy
+    environment:
+      NODE_ENV: production
+      PORT: ${PORT}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY}
+      R2_ENDPOINT: ${R2_ENDPOINT}
+      R2_BUCKET: ${R2_BUCKET}
+      R2_PUBLIC_URL: ${R2_PUBLIC_URL}
+      CORS_ORIGIN: ${CORS_ORIGIN}
+      DATABASE_URL: ${DATABASE_URL}
+    ports:
+      - "${PORT}:${PORT}"
+
+networks:
+  proxy:
+    external: true
