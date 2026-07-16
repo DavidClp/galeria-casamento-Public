@@ -17,6 +17,7 @@ services:
       R2_PUBLIC_URL: ${R2_PUBLIC_URL}
       CORS_ORIGIN: ${CORS_ORIGIN}
       DATABASE_URL: ${DATABASE_URL}
+      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID}
     ports:
       - "${PORT}:${PORT}"
 

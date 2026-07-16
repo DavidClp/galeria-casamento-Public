@@ -37,6 +37,7 @@ jobs:
             echo "MODE=PROD" >> .env
             echo "PORT=${{ secrets.PORT }}" >> .env
             echo "R2_ACCESS_KEY_ID=${{ secrets.R2_ACCESS_KEY_ID }}" >> .env
+            echo "R2_ACCOUNT_ID=${{ secrets.R2_ACCOUNT_ID }}" >> .env
             echo "R2_SECRET_ACCESS_KEY=${{ secrets.R2_SECRET_ACCESS_KEY }}" >> .env
             echo "R2_ENDPOINT=${{ secrets.R2_ENDPOINT }}" >> .env
             echo "R2_BUCKET=${{ secrets.R2_BUCKET }}" >> .env
