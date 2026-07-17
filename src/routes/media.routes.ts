@@ -97,7 +97,7 @@ mediaRouter.post('/video/init', async (req, res) => {
 
 const chunkParser = raw({
   type: '*/*',
-  limit: '12mb',
+  limit: '25mb',
 })
 
 mediaRouter.put('/video/chunk', chunkParser, async (req, res) => {

@@ -14,20 +14,17 @@ export async function optimizeImage(
   mime: string,
 ): Promise<OptimizedImage> {
   try {
-    const pipeline = sharp(buffer, { failOn: 'none' }).rotate()
+    let pipeline = sharp(buffer, { failOn: 'none' }).rotate()
     const meta = await pipeline.metadata()
 
-    let displayPipeline = sharp(buffer, { failOn: 'none' }).rotate()
     if (meta.width && meta.width > MAX_WIDTH) {
-      displayPipeline = displayPipeline.resize({
+      pipeline = pipeline.resize({
         width: MAX_WIDTH,
         withoutEnlargement: true,
       })
     }
 
-    const display = await displayPipeline
-      .webp({ quality: WEBP_QUALITY })
-      .toBuffer()
+    const display = await pipeline.webp({ quality: WEBP_QUALITY }).toBuffer()
 
     return {
       original: buffer,

@@ -10,19 +10,33 @@ export type PutBothResult = {
   r2Url: string | null
 }
 
+const ensuredDirs = new Set<string>()
+
 function localPathForKey(key: string): string {
   return path.join(env.localMediaDir, key)
 }
 
 export async function ensureLocalDir(key: string): Promise<string> {
   const full = localPathForKey(key)
-  await fs.mkdir(path.dirname(full), { recursive: true })
+  const dir = path.dirname(full)
+  if (!ensuredDirs.has(dir)) {
+    await fs.mkdir(dir, { recursive: true })
+    ensuredDirs.add(dir)
+  }
   return full
 }
 
-export async function putLocal(key: string, body: Buffer): Promise<void> {
-  const full = await ensureLocalDir(key)
-  await fs.writeFile(full, body)
+export function putLocal(key: string, body: Buffer): Promise<void> {
+  return ensureLocalDir(key).then((full) => fs.writeFile(full, body))
+}
+
+function scheduleLocalWrite(key: string, body: Buffer): void {
+  void putLocal(key, body).catch((err) => {
+    console.warn(
+      `[storage] background local write failed for ${key}:`,
+      err instanceof Error ? err.message : err,
+    )
+  })
 }
 
 export async function putBoth(
@@ -37,39 +51,28 @@ export async function putBoth(
     contentType: string
   },
 ): Promise<PutBothResult> {
-  const r2Promise = client
-    ? putObject(client, { key, body, contentType })
-    : Promise.reject(new Error('R2 client unavailable'))
-
-  const [r2Result, localResult] = await Promise.allSettled([
-    r2Promise,
-    putLocal(key, body),
-  ])
-
-  const r2Ok = r2Result.status === 'fulfilled'
-  const localOk = localResult.status === 'fulfilled'
-
-  if (!r2Ok) {
-    console.warn(
-      `[storage] R2 put failed for ${key}:`,
-      r2Result.status === 'rejected' ? r2Result.reason : 'unknown',
-    )
+  if (client) {
+    try {
+      const url = await putObject(client, { key, body, contentType })
+      scheduleLocalWrite(key, body)
+      return { r2Ok: true, localOk: true, r2Url: url }
+    } catch (r2Err) {
+      console.warn(
+        `[storage] R2 put failed for ${key}:`,
+        r2Err instanceof Error ? r2Err.message : r2Err,
+      )
+    }
   }
-  if (!localOk) {
+
+  try {
+    await putLocal(key, body)
+    return { r2Ok: false, localOk: true, r2Url: null }
+  } catch (localErr) {
     console.warn(
       `[storage] Local put failed for ${key}:`,
-      localResult.status === 'rejected' ? localResult.reason : 'unknown',
+      localErr instanceof Error ? localErr.message : localErr,
     )
-  }
-
-  if (!r2Ok && !localOk) {
     throw new Error('Falha ao salvar no R2 e no disco local')
-  }
-
-  return {
-    r2Ok,
-    localOk,
-    r2Url: r2Ok ? r2Result.value : null,
   }
 }
 

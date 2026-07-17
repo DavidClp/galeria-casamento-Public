@@ -112,6 +112,31 @@ type MediaRow = {
   poster_key: string | null
 }
 
+type PhotoDbRow = {
+  id: string
+  guest: string
+  src: string
+  src_original: string
+  type: 'photo'
+  r2_ok: boolean
+  local_ok: boolean
+  original_key: string
+  display_key: string
+}
+
+function schedulePhotoPersist(rows: PhotoDbRow[]): void {
+  if (!rows.length) return
+  void prisma.media
+    .createMany({ data: rows })
+    .catch((err) => {
+      console.error(
+        '[upload] falha ao persistir fotos no banco:',
+        rows.map((r) => r.id).join(', '),
+        err,
+      )
+    })
+}
+
 export function toMediaItem(row: MediaRow): MediaItem {
   const displayKey = row.display_key || row.original_key
   const src =
@@ -166,7 +191,7 @@ async function uploadPhoto(
   client: S3Client | null,
   file: Express.Multer.File,
   guestName: string,
-): Promise<MediaItem> {
+): Promise<{ item: MediaItem; dbRow: PhotoDbRow }> {
   if (file.size > MAX_IMAGE_SIZE_BYTES) {
     throw new Error(`excede o limite de ${MAX_IMAGE_SIZE_MB}MB`)
   }
@@ -178,54 +203,69 @@ async function uploadPhoto(
 
   const optimized = await optimizeImage(file.buffer, file.mimetype)
 
-  const originalResult = await putBoth(client, {
+  const originalTask = putBoth(client, {
     key: originalKey,
     body: optimized.original,
     contentType: file.mimetype,
   })
 
-  let displayResult = originalResult
-  let finalDisplayKey = originalKey
-
-  if (optimized.display) {
-    try {
-      displayResult = await putBoth(client, {
+  const displayTask = optimized.display
+    ? putBoth(client, {
         key: displayKey,
         body: optimized.display,
         contentType: optimized.displayContentType,
       })
-      finalDisplayKey = displayKey
-    } catch (err) {
-      console.warn(
-        '[upload] display webp putBoth failed, using original:',
-        err instanceof Error ? err.message : err,
-      )
-      finalDisplayKey = originalKey
-      displayResult = originalResult
-    }
+    : null
+
+  const [originalSettled, displaySettled] = await Promise.allSettled([
+    originalTask,
+    displayTask ?? Promise.resolve(null),
+  ])
+
+  if (originalSettled.status === 'rejected') {
+    throw originalSettled.reason instanceof Error
+      ? originalSettled.reason
+      : new Error('falha ao salvar original')
+  }
+
+  const originalResult = originalSettled.value
+  let finalDisplayKey = originalKey
+  let displayResult = originalResult
+
+  if (displayTask && displaySettled.status === 'fulfilled' && displaySettled.value) {
+    finalDisplayKey = displayKey
+    displayResult = displaySettled.value
+  } else if (displayTask && displaySettled.status === 'rejected') {
+    console.warn(
+      '[upload] display webp putBoth failed, using original:',
+      displaySettled.reason instanceof Error
+        ? displaySettled.reason.message
+        : displaySettled.reason,
+    )
   }
 
   const r2Ok = originalResult.r2Ok || displayResult.r2Ok
   const localOk = originalResult.localOk || displayResult.localOk
-
   const src = preferR2Url(finalDisplayKey, r2Ok, id, 'display')
   const srcOriginal = preferR2Url(originalKey, r2Ok, id, 'original')
+  const createdAt = new Date()
 
-  const row = await prisma.media.create({
-    data: {
-      id,
-      guest: guestName,
-      src,
-      src_original: srcOriginal,
-      type: 'photo',
-      r2_ok: r2Ok,
-      local_ok: localOk,
-      original_key: originalKey,
-      display_key: finalDisplayKey,
-    },
-  })
+  const dbRow: PhotoDbRow = {
+    id,
+    guest: guestName,
+    src,
+    src_original: srcOriginal,
+    type: 'photo',
+    r2_ok: r2Ok,
+    local_ok: localOk,
+    original_key: originalKey,
+    display_key: finalDisplayKey,
+  }
 
-  return toMediaItem(row as MediaRow)
+  return {
+    item: toMediaItem({ ...dbRow, created_at: createdAt, poster: null, poster_key: null }),
+    dbRow,
+  }
 }
 
 export async function uploadMedia(
@@ -237,6 +277,8 @@ export async function uploadMedia(
   const guestName = guest?.trim() || 'Convidado(a)'
   const items: MediaItem[] = []
   const errors: UploadMediaResult['errors'] = []
+
+  const photoJobs: { file: Express.Multer.File; fileName: string }[] = []
 
   for (const [index, file] of files.entries()) {
     const fileName = file.originalname || `arquivo ${index + 1}`
@@ -255,15 +297,31 @@ export async function uploadMedia(
       continue
     }
 
-    try {
-      items.push(await uploadPhoto(client, file, guestName))
-    } catch (err) {
-      errors.push({
-        file: fileName,
-        reason: err instanceof Error ? err.message : 'falha ao enviar',
-      })
-    }
+    photoJobs.push({ file, fileName })
   }
+
+  const results = await Promise.allSettled(
+    photoJobs.map(({ file }) => uploadPhoto(client, file, guestName)),
+  )
+
+  const dbRows: PhotoDbRow[] = []
+
+  results.forEach((result, index) => {
+    if (result.status === 'fulfilled') {
+      items.push(result.value.item)
+      dbRows.push(result.value.dbRow)
+      return
+    }
+    errors.push({
+      file: photoJobs[index].fileName,
+      reason:
+        result.reason instanceof Error
+          ? result.reason.message
+          : 'falha ao enviar',
+    })
+  })
+
+  schedulePhotoPersist(dbRows)
 
   if (!items.length) {
     const summary = errors.map((e) => `"${e.file}": ${e.reason}`).join('; ')
