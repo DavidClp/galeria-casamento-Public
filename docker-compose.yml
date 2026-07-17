@@ -18,8 +18,12 @@ services:
       CORS_ORIGIN: ${CORS_ORIGIN}
       DATABASE_URL: ${DATABASE_URL}
       R2_ACCOUNT_ID: ${R2_ACCOUNT_ID}
+      LOCAL_MEDIA_DIR: /data/media
+      PUBLIC_API_URL: ${CORS_ORIGIN}
     ports:
       - "${PORT}:${PORT}"
+    volumes:
+      - ./data/media:/data/media
 
 networks:
   proxy:

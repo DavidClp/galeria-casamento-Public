@@ -92,11 +92,18 @@ model lessons {
 }
 
 model media {
-  id         String    @id @db.Uuid
-  guest      String
-  src        String
-  type       MediaType
-  created_at DateTime  @default(now())
+  id            String    @id @db.Uuid
+  guest         String
+  src           String
+  src_original  String?
+  poster        String?
+  type          MediaType
+  r2_ok         Boolean   @default(true)
+  local_ok      Boolean   @default(false)
+  original_key  String?
+  display_key   String?
+  poster_key    String?
+  created_at    DateTime  @default(now())
 
   @@index([created_at(sort: Desc), id(sort: Desc)])
   @@index([type, created_at(sort: Desc)])

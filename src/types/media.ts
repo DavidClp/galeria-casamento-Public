@@ -4,6 +4,11 @@ export interface MediaItem {
   id: string
   type: MediaKind
   src: string
+  srcOriginal?: string
+  srcFallback?: string
+  originalFallback?: string
+  poster?: string | null
+  posterFallback?: string | null
   guest: string
   date: string
 }

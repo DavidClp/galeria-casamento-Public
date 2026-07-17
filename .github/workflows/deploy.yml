@@ -44,6 +44,9 @@ jobs:
             echo "R2_PUBLIC_URL=${{ secrets.R2_PUBLIC_URL }}" >> .env
             echo "CORS_ORIGIN=${{ secrets.CORS_ORIGIN }}" >> .env
             echo "DATABASE_URL=${{ secrets.DATABASE_URL }}" >> .env
+            echo "LOCAL_MEDIA_DIR=/data/media" >> .env
+            echo "PUBLIC_API_URL=${{ secrets.CORS_ORIGIN }}" >> .env
 
+            mkdir -p data/media
             docker compose up -d --build
           EOF
